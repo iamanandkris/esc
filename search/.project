@@ -1,5 +1,5 @@
 <projectDescription>
-  <name>esc-index</name>
+  <name>search</name>
   <buildSpec>
     <buildCommand>
       <name>org.scala-ide.sdt.core.scalabuilder</name>
@@ -9,5 +9,4 @@
     <nature>org.scala-ide.sdt.core.scalanature</nature>
     <nature>org.eclipse.jdt.core.javanature</nature>
   </natures>
-  <linkedResources> </linkedResources>
 </projectDescription>

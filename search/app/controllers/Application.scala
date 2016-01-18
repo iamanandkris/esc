@@ -37,7 +37,7 @@ object Application extends Controller {
 
   // form page
   def form = Action {
-    val rsp = Json.parse(WS.url(server + "_status").
+    val rsp = Json.parse(WS.url(server + "_stats").
       get.value.get.body)
     val indices = ((rsp \\ "indices")).
       map(_.as[Map[String,JsValue]].keySet.head)

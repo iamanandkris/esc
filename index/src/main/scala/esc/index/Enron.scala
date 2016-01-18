@@ -51,7 +51,7 @@ class EnronParser extends Parser {
 
 class EnronFileFilter extends FileFilter {
   override def accept(file: File): Boolean = {
-    file.getAbsolutePath().contains("/sent/")
+    file.getAbsolutePath().contains("""\sent\""")
   }
 }
 

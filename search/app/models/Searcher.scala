@@ -27,10 +27,14 @@ case class SearchParams(
 object Searcher {
   
   def search(server: String, params: SearchParams): SearchResult = {
+    println("Server "+ server)
     val payload = Searcher.buildQuery(params)
+    println("Payload "+ payload)
+    println("Post "+ server + params.index + "/_search?pretty=true")
     val rawResponse = WS.url(server + params.index + 
       "/_search?pretty=true").post(payload).value.get.body
     val rsp = Json.parse(rawResponse)
+    println("Response "+ rsp)
     val meta = (rsp \ "error").asOpt[String] match {
       case Some(x) => Map(
         "error" -> x,
@@ -49,11 +53,12 @@ object Searcher {
     val docs = if (meta.contains("error")) Seq()
     else {
       val hits = (rsp \ "hits" \ "hits").asOpt[List[JsValue]].get
+      println("Hits ->>>>" + rsp)
       val idscores = hits.map(hit => Map(
         "_id" -> (hit \ "_id"),
         "_score" -> (hit \ "_score")))
       val fields = hits.map(hit => 
-        (hit \ "fields").asOpt[Map[String,JsValue]].get)
+        (hit \ "highlight").asOpt[Map[String,JsValue]].get)
       idscores.zip(fields).
         map(tuple => tuple._1 ++ tuple._2).
         map(doc => doc.toSeq.sortWith((doc1, doc2) => doc1._1 < doc2._1))
@@ -68,12 +73,12 @@ object Searcher {
       else Map("query_string" -> Map("query" -> params.query)))
     val queryFilter = if (params.filter.isEmpty) null
       else Json.toJson(Map("query_string" -> Json.toJson(params.filter)))
-    val queryFacets = if (params.facetfields.isEmpty) null
-      else {
-        val fields = params.facetfields.split(",").map(_.trim)
-        Json.toJson(fields.zip(fields.
-          map(field => Map("terms" -> Map("field" -> field)))).toMap)
-      }
+    //val queryFacets = if (params.facetfields.isEmpty) null
+      //else {
+      //  val fields = params.facetfields.split(",").map(_.trim)
+      //  Json.toJson(fields.zip(fields.
+      //    map(field => Map("terms" -> Map("field" -> field)))).toMap)
+     // }
     val querySort = if (params.sort.isEmpty) null
       else Json.toJson(params.sort.split(",").map(_.trim).map(field => 
         if (field.toLowerCase.endsWith(" asc") || 
@@ -96,7 +101,7 @@ object Searcher {
       "size" -> Json.toJson(params.rows),
       "query" -> queryQuery,
       "filter" -> queryFilter,
-      "facets" -> queryFacets,
+      //"facets" -> queryFacets,
       "sort" -> querySort,
       "fields" -> queryFields,
       "highlight" -> queryHighlight).
