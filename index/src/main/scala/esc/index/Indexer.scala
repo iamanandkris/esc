@@ -11,6 +11,8 @@ import akka.actor.{ Props, ActorSystem, ActorRef, Actor }
 import akka.routing.RoundRobinRouter
 import play.api.libs.json.Json
 import play.api.libs.ws.WS
+import play.api.Play.current
+import scala.concurrent.ExecutionContext.Implicits.global 
 
 object Indexer extends App {
 
@@ -50,7 +52,7 @@ object Indexer extends App {
     var succs = 0
     var fails = 0
 
-    def createIndex(): Int = sendToServer(server0, """
+    def createIndex() = sendToServer(server0, """
       {"settings": 
         {"index": 
           {"number_of_shards": %s,
@@ -58,18 +60,21 @@ object Indexer extends App {
       }}""".format(props("numShards"), props("numReplicas")),
       false)
 
-    def createSchema(): Int = sendToServer(server1 + "_mapping","""{ "%s" : { "properties" : %s } }""".format(props("indexName"), schema.mappings), false)
+    def createSchema() = sendToServer(server1 + "_mapping","""{ "%s" : { "properties" : %s } }""".format(props("indexName"), schema.mappings), false)
 
     def receive = {
       case StartMsg => {
         val filefilter = Class.forName(props("filterClass")).newInstance.asInstanceOf[FileFilter]
         val files = walk(new File(props("rootDir"))).filter(f => filefilter.accept(f))
-        createIndex()
-        createSchema()
-        for (file <- files) {
-          println("loading file " + file + " to queue")
-          nreqs = nreqs + 1
-          router ! IndexMsg(file)
+        
+        val p = createIndex().flatMap { x =>
+          createSchema().map { y => 
+              for (file <- files) {
+                println("loading file " + file + " to queue")
+                nreqs = nreqs + 1
+                router ! IndexMsg(file)
+              }
+          }
         }
       }
       case IndexRspMsg(status) => {
@@ -91,7 +96,7 @@ object Indexer extends App {
     val parser = Class.forName(props("parserClass")).newInstance.asInstanceOf[Parser]
     val schema = Class.forName(props("schemaClass")).newInstance.asInstanceOf[Schema]
 
-    def addDocument(doc: Map[String, String]): Int = {
+    def addDocument(doc: Map[String, String]) = {
       val json = doc.filter(kv => schema.isValid(kv._1)).map(kv =>
           {
             if (schema.isMultiValued(kv._1))
@@ -107,10 +112,9 @@ object Indexer extends App {
     def receive = {
       case IndexMsg(file) => {
         val doc = parser.parse(Source.fromFile(file))
-        //println("Parsed Values -> " + doc)
-        val testing = addDocument(doc)
-        //println ("Processed Value " + testing)
-        sender ! IndexRspMsg(testing)
+        addDocument(doc).map { x => 
+            sender ! IndexRspMsg(x)
+        }
       }
     }
   }
@@ -139,7 +143,8 @@ object Indexer extends App {
   }
 
   def sendToServer(server: String, payload: String,
-                   usePost: Boolean): Int = {
+                   usePost: Boolean) = {
+    
     //println("Payload -> " + payload)
     val prom = if (usePost) WS.url(server).post(payload)
     else WS.url(server).put(payload)
@@ -151,6 +156,6 @@ object Indexer extends App {
         case Some(true) => 0
         case _          => -1
       }
-    }).await.get
+    })
   }
 }
